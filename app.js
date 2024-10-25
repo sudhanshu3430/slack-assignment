@@ -16,117 +16,108 @@ const app = new App({
 
 
 // The echo command simply echoes on command
-app.command('/ticket', async ({ ack, body, client, logger }) => {
-    // Acknowledge the command request
-    await ack();
-  
+app.event('app_home_opened', async ({ event, client }) => {
     try {
-      // Call views.open with the built-in client
-      const result = await client.views.open({
-        // Pass a valid trigger_id within 3 seconds of receiving it
-        trigger_id: body.trigger_id,
-        // View payload
+      await client.views.publish({
+        user_id: event.user,
         view: {
-          type: 'modal',
-          // View identifier
-          callback_id: 'view_1',
-          title: {
-            type: 'plain_text',
-            text: 'Modal title'
-          },
+          type: 'home',
           blocks: [
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: 'Welcome to a modal with _blocks_'
+                text: '*Welcome to the app! Click the button to open the modal.*',
               },
-              accessory: {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: 'Click me!'
-                },
-                action_id: 'button_abc'
-              }
             },
             {
-              type: 'input',
-              block_id: 'input_c',
-              label: {
-                type: 'plain_text',
-                text: 'What are your hopes and dreams?'
-              },
-              element: {
-                type: 'plain_text_input',
-                action_id: 'dreamy_input',
-                multiline: true
-              }
-            }
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: {
+                    type: 'plain_text',
+                    text: 'Open Modal',
+                  },
+                  action_id: 'open_modal', // Action ID for the button
+                },
+              ],
+            },
           ],
-          submit: {
-            type: 'plain_text',
-            text: 'Submit'
-          }
-        }
+        },
       });
-      logger.info(result);
+    } catch (error) {
+      console.error(error);
     }
-    catch (error) {
-      logger.error(error);
-    }
-});
-app.action('button_abc', async ({ ack, body, client, logger }) => {
-    // Acknowledge the button request
+  });
+
+  
+  app.action('open_modal', async ({ body, ack, client }) => {
     await ack();
   
-    try {
-      if (body.type !== 'block_actions' || !body.view) {
-        return;
-      }
-      // Call views.update with the built-in client
-      const result = await client.views.update({
-        // Pass the view_id
-        view_id: body.view.id,
-        // Pass the current hash to avoid race conditions
-        hash: body.view.hash,
-        // View payload with updated blocks
-        view: {
-          type: 'modal',
-          // View identifier
-          callback_id: 'view_1',
-          title: {
+    const modalView = {
+      type: 'modal',
+      callback_id: 'modal_1',
+      title: {
+        type: 'plain_text',
+        text: 'Your Input',
+      },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'input_block',
+          label: {
             type: 'plain_text',
-            text: 'Updated modal'
+            text: 'Please enter your answer',
           },
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'plain_text',
-                text: 'You updated the modal!'
-              }
-            },
-            {
-              type: 'image',
-              image_url: 'https://media.giphy.com/media/SVZGEcYt7brkFUyU90/giphy.gif',
-              alt_text: 'Yay! The modal was updated'
-            }
-          ]
-        }
-      });
-      logger.info(result);
-    }
-    catch (error) {
-      logger.error(error);
-    }
-});
-app.view('view_1', async ({ ack, body }) => {
-    await ack({
-      response_action: 'update',
-      view: buildNewModalView(body),
+          element: {
+            type: 'plain_text_input',
+            action_id: 'input_value',
+          },
+        },
+      ],
+      submit: {
+        type: 'plain_text',
+        text: 'Submit',  // This defines the submit button
+      },
+    };
+  
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: modalView,
     });
   });
+  
+
+  app.view('modal_1', async ({ ack, body, view, client }) => {
+    await ack(); // Acknowledge the view submission
+  
+    const userInput = view.state.values.input_block.input_value.value; // Extract user input
+  
+    const resultModal = {
+      type: 'modal',
+      title: {
+        type: 'plain_text',
+        text: 'Your Input Submitted',
+      },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `You entered: *${userInput}*`, // Show the user input
+          },
+        },
+      
+      ],
+    };
+  
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: resultModal,
+    });
+  });
+  
 (async () => {
   // Start your app
   await app.start(process.env.PORT || 3000);
